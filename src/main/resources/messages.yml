@@ -1,0 +1,99 @@
+prefix: "<b><gradient:#F5C842:#FEF06A><shadow:#3A3414:1>rStructures</shadow></gradient></b> <dark_gray>»</dark_gray>"
+
+no-permission: "{prefix} <white>У тебя нет прав на эту команду."
+player-only: "{prefix} <white>Команда только для игрока."
+unknown: "{prefix} <white>Нет такой команды. Список: <#FEF06A>/{command} help"
+
+help:
+  - "{prefix} <white>Команды:"
+  - " <white>/{command} menu <dark_gray>»</dark_gray> <white>лут, данжи, шанс ключа"
+  - " <white>/{command} spawn [кол-во] [мир] <dark_gray>»</dark_gray> <white>заспавнить данжи"
+  - " <white>/{command} spawn cancel <dark_gray>»</dark_gray> <white>отменить идущий спавн"
+  - " <white>/{command} undo [id] <dark_gray>»</dark_gray> <white>удалить данж"
+  - " <white>/{command} give [key|compass|pickaxe] [игрок] [кол-во] <dark_gray>»</dark_gray> <white>выдать предмет"
+  - " <white>/{command} admin [test|remove|loot] <dark_gray>»</dark_gray> <white>управление шалкерами"
+  - " <white>/{command} reload <dark_gray>»</dark_gray> <white>перезагрузить конфиги"
+
+time:
+  days: "д"
+  hours: "ч"
+  minutes: "мин"
+  seconds: "с"
+
+auto:
+  timer: "<white>Данж исчезнет через <#FEF06A>{time}"
+
+spawn:
+  usage: "{prefix} <white>Формат команды: <#FEF06A>/{command} spawn [кол-во] [мир]"
+  invalid-amount: "{prefix} <white>Количество от {min} до {max}."
+  started: "{prefix} <white>Ищу место для данжа {name}<white>. Отменить: <#FEF06A>/{command} spawn cancel"
+  busy: "{prefix} <white>Спавн уже идёт. Отменить: <#FEF06A>/{command} spawn cancel"
+  cancelled: "{prefix} <white>Спавн отменён."
+  not-running: "{prefix} <white>Сейчас ничего не спавнится."
+  no-dungeon-world: "{prefix} <white>Для мира {world} нет данжей в папке structures."
+  world-not-found: "{prefix} <white>Мир {world} не загружен."
+  success: "{prefix} <white>Данж {name} <#FEF06A>{id}</#FEF06A> <white>заспавнен: <#FEF06A>{x} {y} {z}</#FEF06A>, {world}"
+  limit-reached: "{prefix} <white>Достигнут лимит данжей: <#FEF06A>{count}</#FEF06A>. Удали старый через /{command} undo."
+  no-location: "{prefix} <white>В мире {world} не нашлось места."
+  failed: "{prefix} <white>Данж не заспавнен: {reason}."
+  reasons:
+    no-templates: "нет данжей с загруженной схемой для этого мира"
+    regions-unavailable: "WorldGuard отключён в этом мире"
+    backup-failed: "территория не сохранилась, см. консоль"
+    paste-failed: "схема не вставилась, см. консоль"
+
+undo:
+  usage: "{prefix} <white>Формат команды: <#FEF06A>/{command} undo [id]"
+  success: "{prefix} <white>Данж <#FEF06A>{id}</#FEF06A> удалён."
+  not-found: "{prefix} <white>Данж {id} не найден."
+  busy: "{prefix} <white>Данж {id} уже удаляется."
+  world-missing: "{prefix} <white>Мир данжа {id} не загружен."
+  restore-failed: "{prefix} <white>Территория данжа {id} не восстановлена, см. консоль."
+
+reload:
+  done: "{prefix} <white>Конфиги перезагружены."
+  failed: "{prefix} <white>Ошибка в конфиге, работает старый. См. консоль."
+
+shulker:
+  closed: "{prefix} <white>Хранилище закрыто, нужен ключ."
+  closed-pickaxe: "{prefix} <white>Хранилище закрыто, сломай его киркой взломщика."
+  timer-started: "{prefix} <white>Отсчёт запущен, хранилище откроется через <#FEF06A>{time}</#FEF06A>."
+  timer-left: "{prefix} <white>Хранилище откроется через <#FEF06A>{time}</#FEF06A>."
+  pickaxe-progress: "<white>Осталось ударов: <#FEF06A>{remaining}"
+  opened: "{prefix} <white>{player} открыл хранилище данжа ключом."
+  opened-pickaxe: "{prefix} <white>{player} взломал хранилище данжа киркой."
+  opened-timer: "{prefix} <white>Хранилище данжа открылось по таймеру."
+  key-saved: "{prefix} <white>Ключ не сломался."
+
+give:
+  usage: "{prefix} <white>Формат команды: <#FEF06A>/{command} give [key|compass|pickaxe] [игрок] [кол-во]"
+  given: "{prefix} <white>Выдано: {item} x{amount}, игрок {player}"
+
+compass:
+  ready: "готов"
+  cooldown: "{prefix} <white>Компас снова заработает через <#FEF06A>{time}</#FEF06A>."
+  none: "{prefix} <white>В этом мире нет данжей."
+  target: "{prefix} <white>Компас указывает на данж: <#FEF06A>{x} {y} {z}"
+
+key:
+  found: "{prefix} <white>{player} нашёл ключ от данжа."
+
+loot:
+  saved: "{prefix} <white>Лут сохранён."
+
+admin:
+  usage:
+    - "{prefix} <white>Команды админа:"
+    - " <white>/{command} admin test <dark_gray>»</dark_gray> <white>сделать шалкер данжевым"
+    - " <white>/{command} admin remove <dark_gray>»</dark_gray> <white>убрать шалкер из данжевых"
+    - " <white>/{command} admin loot <dark_gray>»</dark_gray> <white>заполнить шалкер лутом"
+  look-at-shulker: "{prefix} <white>Посмотри на шалкер и повтори команду."
+  shulker-registered: "{prefix} <white>Шалкер добавлен."
+  shulker-already: "{prefix} <white>Шалкер уже добавлен."
+  shulker-removed: "{prefix} <white>Шалкер убран."
+  shulker-not-managed: "{prefix} <white>Это не данжевый шалкер."
+  shulker-looted: "{prefix} <white>Шалкер заполнен."
+  dungeon-looted: "{prefix} <white>Шалкеры данжа {id} заполнены."
+  loot-empty: "{prefix} <white>Лут пуст. Добавь предметы через <#FEF06A>/{command} menu"
+
+config-version: 1 #не трогать!!!

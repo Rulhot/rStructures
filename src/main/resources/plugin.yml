@@ -1,0 +1,13 @@
+name: rStructures
+version: '2.0'
+main: ru.rulhot.rStructures.RStructures
+api-version: '1.21.4'
+folia-supported: true
+load: POSTWORLD
+authors: [ Rulhot ]
+depend: [WorldEdit, WorldGuard]
+softdepend: [FastAsyncWorldEdit, FancyHolograms, DecentHolograms]
+
+libraries:
+  - com.j256.ormlite:ormlite-jdbc:6.1
+  - com.zaxxer:HikariCP:7.1.0

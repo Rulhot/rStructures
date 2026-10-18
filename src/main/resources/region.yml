@@ -1,0 +1,28 @@
+region:
+  padding: 3
+  name: "struct_{id}"
+  flags:
+    use: allow
+    block-break: deny
+    build: deny
+    mob-spawning: deny
+    pvp: allow
+    tnt: deny
+    chest-access: allow
+    creeper-explosion: deny
+    damage-animals: deny
+    ghast-fireball: deny
+    respawn-anchors: deny
+    destroy-vehicle: deny
+    enderdragon-block-damage: deny
+    mob-damage: deny
+    lava-fire: deny
+    lightning: deny
+    lighter: deny
+
+limits:
+  distance: 100
+  max: -1
+  avoid-regions: true
+
+config-version: 1 #не трогать!!!

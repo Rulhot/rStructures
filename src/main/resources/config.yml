@@ -1,0 +1,67 @@
+settings:
+  debug: false
+  metrics: true
+  update-check: true
+
+command:
+  main: rstructures
+  aliases: [ rs ]
+
+schematic-folders:
+  - "WorldEdit/schematics"
+  - "FastAsyncWorldEdit/schematics"
+
+containers:
+  - SHULKER_BOX
+
+holograms:
+  enabled: true
+  height: 1.6
+  view-distance: 32
+  closed:
+    - "<red><b>!"
+  opened:
+    - "<green><b>✔"
+  timer:
+    - "<yellow><b>{time}"
+  scale: 1.3
+  billboard: center
+  background: none
+  text-shadow: true
+  see-through: false
+
+sounds:
+  shulker-open:
+    key: "minecraft:block.iron_door.open"
+    volume: 1.0
+    pitch: 1.0
+  shulker-closed:
+    key: "minecraft:block.chest.locked"
+    volume: 1.0
+    pitch: 1.0
+  key-saved:
+    key: "minecraft:entity.experience_orb.pickup"
+    volume: 1.0
+    pitch: 1.2
+  compass:
+    key: "minecraft:item.lodestone_compass.lock"
+    volume: 1.0
+    pitch: 1.0
+  menu-click:
+    key: "minecraft:ui.button.click"
+    volume: 0.5
+    pitch: 1.0
+
+particles:
+  shulker-open:
+    type: HAPPY_VILLAGER
+    count: 30
+    spread: 0.5
+    speed: 0.05
+  shulker-closed:
+    type: SMOKE
+    count: 15
+    spread: 0.3
+    speed: 0.02
+
+config-version: 1 #не трогать!!!

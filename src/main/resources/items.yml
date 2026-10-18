@@ -1,0 +1,67 @@
+key:
+  material: TRIPWIRE_HOOK
+  texture: ""
+  name: "<white>Ключ от данжа"
+  lore:
+    - ""
+    - " <#FEF06A>Ключ <white>открывает закрытый"
+    - " <white>шалкер в данже."
+    - ""
+  model-data: 0
+  glint: true
+  flags: []
+  functions:
+    glow: true
+    drop-on-quit: false
+    deny-craft: true
+    save-chance: 50
+
+compass:
+  material: COMPASS
+  texture: ""
+  name: "<white>Компас данжей"
+  lore:
+    - ""
+    - " <#FEF06A>Компас <white>подсказывает, где"
+    - " <white>в этом мире стоит данж."
+    - ""
+    - " <#FEF06A><u>▌</u> <white>Координаты зашифрованы."
+    - " <#FEF06A><u>▌</u> <white>Работает раз в 8 часов."
+    - " <#FEF06A>▌ <white>До использования: <#FEF06A>{cooldown}"
+    - ""
+    - " <white>Нажми ПКМ, чтобы использовать."
+    - ""
+  model-data: 0
+  glint: false
+  flags: []
+  functions:
+    glow: true
+    drop-on-quit: false
+    deny-craft: true
+    encrypt: true
+    encrypt-digits: 2
+    pointer: false
+    cooldown: 8h
+    consume: false
+    target: random
+
+pickaxe:
+  material: NETHERITE_PICKAXE
+  texture: ""
+  name: "<white>Кирка взломщика"
+  lore:
+    - ""
+    - " <#FEF06A>Кирка <white>ломает закрытые"
+    - " <white>хранилища в данже."
+    - ""
+  model-data: 0
+  glint: false
+  flags: []
+  functions:
+    glow: true
+    drop-on-quit: false
+    deny-craft: true
+    hits: 12
+    durability: 64
+
+config-version: 1 #не трогать!!!

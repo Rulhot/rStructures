@@ -1,0 +1,17 @@
+spawn:
+  min-x: -5000
+  max-x: 5000
+  min-z: -5000
+  max-z: 5000
+  flatness: 3
+  attempts: 36
+  radius: 32
+  step: 4
+  chunks-per-tick: 12
+  generate-chunks: true
+  urgent-chunks: false
+
+build:
+  layers-per-tick: 8
+
+config-version: 1 #не трогать!!!
