@@ -11,7 +11,11 @@ repositories {
         content { includeGroup("de.oliver") }
     }
     maven("https://jitpack.io") {
-        content { includeGroup("com.github.decentsoftware-eu") }
+        content {
+            includeGroup("com.github.decentsoftware-eu")
+            includeGroup("com.github.GriefPrevention")
+            includeGroup("com.github.CakesStudio")
+        }
     }
 }
 
@@ -35,6 +39,8 @@ dependencies {
     compileOnly("com.zaxxer:HikariCP:7.1.0")
     compileOnly("de.oliver:FancyHolograms:2.10.0") { isTransitive = false }
     compileOnly("com.github.decentsoftware-eu:decentholograms:2.8.12") { isTransitive = false }
+    compileOnly("com.github.GriefPrevention:GriefPrevention:16.18.4") { isTransitive = false }
+    compileOnly("com.github.CakesStudio:CakeRegionsAPI:v2.0.3") { isTransitive = false }
 }
 
 java {

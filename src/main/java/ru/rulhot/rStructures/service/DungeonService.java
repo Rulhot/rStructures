@@ -24,6 +24,7 @@ import org.jetbrains.annotations.Nullable;
 import ru.rulhot.rStructures.database.model.DungeonRecord;
 import ru.rulhot.rStructures.database.model.ShulkerRecord;
 import ru.rulhot.rStructures.database.repository.DungeonRepository;
+import ru.rulhot.rStructures.hook.ProtectionHook;
 import ru.rulhot.rStructures.manager.ConfigManager;
 import ru.rulhot.rStructures.model.Bounds;
 import ru.rulhot.rStructures.model.DungeonTemplate;
@@ -61,6 +62,7 @@ public final class DungeonService {
     private final @NotNull LootService lootService;
     private final @NotNull DungeonRepository dungeonRepository;
     private final @NotNull ChunkService chunkService;
+    private final @NotNull ProtectionHook protection;
     private final @NotNull Map<String, SchedulerUtil.Task> autoUndoTasks = new ConcurrentHashMap<>();
     private final @NotNull Set<String> undoing = ConcurrentHashMap.newKeySet();
     private final @NotNull Map<String, AtomicInteger> autoUndoSeconds = new ConcurrentHashMap<>();
@@ -464,7 +466,7 @@ public final class DungeonService {
         }
         String regionId = newRegionId();
         ProtectedCuboidRegion region = createRegion(world, bounds, regionId, settings.region());
-        if (overlaps(regions, region, settings.region())) {
+        if (overlaps(world, regions, region, settings.region())) {
             finish.accept(new SpawnResult.Unsuitable());
             return;
         }
@@ -604,6 +606,7 @@ public final class DungeonService {
     }
 
     private boolean overlaps(
+            @NotNull World world,
             @NotNull RegionManager regions,
             @NotNull ProtectedCuboidRegion region,
             @NotNull Settings.Region settings
@@ -613,7 +616,12 @@ public final class DungeonService {
                 return true;
             }
         }
-        return false;
+        if (!settings.avoidForeignRegions()) {
+            return false;
+        }
+        BlockVector3 min = region.getMinimumPoint();
+        BlockVector3 max = region.getMaximumPoint();
+        return protection.overlaps(world, new Bounds(min.x(), min.y(), min.z(), max.x(), max.y(), max.z()));
     }
 
     private void restore(

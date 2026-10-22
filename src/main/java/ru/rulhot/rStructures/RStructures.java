@@ -20,9 +20,12 @@ import ru.rulhot.rStructures.database.repository.DungeonRepository;
 import ru.rulhot.rStructures.database.repository.LootRepository;
 import ru.rulhot.rStructures.database.repository.ShulkerRepository;
 import ru.rulhot.rStructures.database.repository.ValueRepository;
+import ru.rulhot.rStructures.hook.CakeRegionsHook;
 import ru.rulhot.rStructures.hook.DecentHologramHook;
 import ru.rulhot.rStructures.hook.FancyHologramHook;
+import ru.rulhot.rStructures.hook.GriefPreventionHook;
 import ru.rulhot.rStructures.hook.HologramHook;
+import ru.rulhot.rStructures.hook.ProtectionHook;
 import ru.rulhot.rStructures.listener.ItemListener;
 import ru.rulhot.rStructures.listener.KeyListener;
 import ru.rulhot.rStructures.listener.MenuListener;
@@ -43,6 +46,7 @@ import ru.rulhot.rStructures.util.logger.Logger;
 
 import java.io.File;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 
 public final class RStructures extends JavaPlugin {
@@ -110,7 +114,8 @@ public final class RStructures extends JavaPlugin {
         shulkerService.refreshHolograms();
         shulkerService.startTimers();
         DungeonService dungeonService = new DungeonService(scheduler, configManager, schematicService,
-                shulkerService, lootService, dungeonRepository, new ChunkService(scheduler));
+                shulkerService, lootService, dungeonRepository, new ChunkService(scheduler),
+                hookProtection(pluginManager));
         this.dungeonService = dungeonService;
         dungeonService.startTimers();
         MenuManager menuManager = new MenuManager(scheduler, configManager, lootService, dungeonService);
@@ -157,6 +162,29 @@ public final class RStructures extends JavaPlugin {
             Logger.warn("Плагин голограмм несовместим, значки над шалкерами отключены: " + exception);
         }
         return HologramHook.NONE;
+    }
+
+    private @NotNull ProtectionHook hookProtection(@NotNull PluginManager pluginManager) {
+        List<ProtectionHook> hooks = new ArrayList<>();
+        if (pluginManager.isPluginEnabled("GriefPrevention")) {
+            try {
+                hooks.add(new GriefPreventionHook());
+            } catch (Throwable throwable) {
+                Logger.error("Не удалось подключить GriefPrevention, его приваты не проверяются", throwable);
+            }
+        }
+        if (pluginManager.isPluginEnabled("CakeRegionsPlus")) {
+            try {
+                hooks.add(new CakeRegionsHook());
+            } catch (Throwable throwable) {
+                Logger.error("Не удалось подключить CakeRegionsPlus, его регионы не проверяются", throwable);
+            }
+        }
+        return switch (hooks.size()) {
+            case 0 -> ProtectionHook.NONE;
+            case 1 -> hooks.getFirst();
+            default -> (world, area) -> hooks.stream().anyMatch(hook -> hook.overlaps(world, area));
+        };
     }
 
     @Override
