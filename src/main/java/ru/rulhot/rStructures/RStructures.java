@@ -20,7 +20,6 @@ import ru.rulhot.rStructures.database.repository.DungeonRepository;
 import ru.rulhot.rStructures.database.repository.LootRepository;
 import ru.rulhot.rStructures.database.repository.ShulkerRepository;
 import ru.rulhot.rStructures.database.repository.ValueRepository;
-import ru.rulhot.rStructures.hook.CakeRegionsHook;
 import ru.rulhot.rStructures.hook.DecentHologramHook;
 import ru.rulhot.rStructures.hook.FancyHologramHook;
 import ru.rulhot.rStructures.hook.GriefPreventionHook;
@@ -118,6 +117,7 @@ public final class RStructures extends JavaPlugin {
                 hookProtection(pluginManager));
         this.dungeonService = dungeonService;
         dungeonService.startTimers();
+        dungeonService.recoverUnfinished();
         MenuManager menuManager = new MenuManager(scheduler, configManager, lootService, dungeonService);
         this.menuManager = menuManager;
         menuManager.startRefresh();
@@ -171,13 +171,6 @@ public final class RStructures extends JavaPlugin {
                 hooks.add(new GriefPreventionHook());
             } catch (Throwable throwable) {
                 Logger.error("Не удалось подключить GriefPrevention, его приваты не проверяются", throwable);
-            }
-        }
-        if (pluginManager.isPluginEnabled("CakeRegionsPlus")) {
-            try {
-                hooks.add(new CakeRegionsHook());
-            } catch (Throwable throwable) {
-                Logger.error("Не удалось подключить CakeRegionsPlus, его регионы не проверяются", throwable);
             }
         }
         return switch (hooks.size()) {

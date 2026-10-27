@@ -6,5 +6,7 @@ mysql:
   database: rstructures
   user: "root"
   password: ""
+  # true: шифровать соединение с MySQL. Включай, если база не на этой же машине
+  ssl: false
 
 config-version: 1 #не трогать!!!

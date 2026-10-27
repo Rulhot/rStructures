@@ -55,6 +55,9 @@ public final class DungeonRecord {
     @DatabaseField(columnName = "created_at")
     private long createdAt;
 
+    @DatabaseField(columnName = "ready", defaultValue = "true")
+    private volatile boolean ready = true;
+
     public DungeonRecord(
             @NotNull String regionId,
             @NotNull UUID worldUuid,

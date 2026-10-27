@@ -35,6 +35,7 @@ import ru.rulhot.rStructures.util.SchedulerUtil;
 import ru.rulhot.rStructures.util.logger.Logger;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -64,18 +65,16 @@ public final class DungeonService {
     private final @NotNull ChunkService chunkService;
     private final @NotNull ProtectionHook protection;
     private final @NotNull Map<String, SchedulerUtil.Task> autoUndoTasks = new ConcurrentHashMap<>();
-    private final @NotNull Set<String> undoing = ConcurrentHashMap.newKeySet();
+    private final @NotNull Set<String> busy = ConcurrentHashMap.newKeySet();
     private final @NotNull Map<String, AtomicInteger> autoUndoSeconds = new ConcurrentHashMap<>();
     private final @NotNull AtomicBoolean manualSpawn = new AtomicBoolean();
     private volatile @Nullable SchedulerUtil.Task lifetimeTask;
     private final @NotNull Object slotLock = new Object();
-    private int pendingSpawns;
-    private volatile boolean cancelled;
-    private final @NotNull AtomicInteger searchAttempts = new AtomicInteger();
-    private final @NotNull AtomicInteger rejectedPlaces = new AtomicInteger();
+    private final @NotNull Map<String, Bounds> reserved = new HashMap<>();
+    private volatile boolean manualCancelled;
 
     public void cancelSpawn() {
-        cancelled = true;
+        manualCancelled = true;
     }
 
     public @Nullable String openType(@NotNull DungeonRecord record) {
@@ -89,8 +88,9 @@ public final class DungeonService {
     public void startTimers() {
         lifetimeTask = scheduler.runGlobalTimer(LIFETIME_CHECK_TICKS, () -> {
             for (DungeonRecord record : dungeonRepository.all()) {
-                if (lifetimeSecondsLeft(record) == 0L && !autoUndoTasks.containsKey(record.getRegionId())
-                        && !undoing.contains(record.getRegionId())) {
+                if (record.isReady() && lifetimeSecondsLeft(record) == 0L
+                        && !autoUndoTasks.containsKey(record.getRegionId())
+                        && !busy.contains(record.getRegionId())) {
                     startAutoUndo(record, lifetimeAuto(record));
                 }
             }
@@ -113,7 +113,27 @@ public final class DungeonService {
     }
 
     public boolean beginSpawn() {
-        return manualSpawn.compareAndSet(false, true);
+        if (!manualSpawn.compareAndSet(false, true)) {
+            return false;
+        }
+        manualCancelled = false;
+        return true;
+    }
+
+    public void recoverUnfinished() {
+        for (DungeonRecord record : dungeonRepository.all()) {
+            if (record.isReady()) {
+                continue;
+            }
+            String regionId = record.getRegionId();
+            Logger.warn("Данж " + regionId + " не достроился до остановки сервера, возвращаю территорию из бэкапа");
+            undo(regionId, result -> {
+                if (result != SpawnResult.Undo.SUCCESS) {
+                    Logger.warn("Данж " + regionId + " не удалось откатить: " + result
+                            + ". Повторите вручную: /rstructures undo " + regionId);
+                }
+            });
+        }
     }
 
     public void endSpawn() {
@@ -172,10 +192,9 @@ public final class DungeonService {
                 yield true;
             }
             case SpawnResult.Failed failed -> {
-                String reason = failed.reason().name().toLowerCase(Locale.ROOT).replace('_', '-');
                 configManager.send(sender, "spawn.failed", Map.of(
                         "world", world.getName(),
-                        "reason", configManager.raw("spawn.reasons." + reason)
+                        "reason", reasonText(failed)
                 ));
                 yield false;
             }
@@ -187,14 +206,20 @@ public final class DungeonService {
     }
 
     public void spawn(@NotNull World world, @Nullable String templateId, @NotNull Consumer<SpawnResult> callback) {
-        cancelled = false;
-        searchAttempts.set(0);
-        rejectedPlaces.set(0);
+        start(world, templateId, new Job(true), callback);
+    }
+
+    private void start(
+            @NotNull World world,
+            @Nullable String templateId,
+            @NotNull Job job,
+            @NotNull Consumer<SpawnResult> callback
+    ) {
         long startedAt = System.currentTimeMillis();
         Consumer<SpawnResult> finish = result -> {
             Logger.debug("Спавн данжа в мире " + world.getName() + ": " + result.getClass().getSimpleName()
                     + ", всего " + (System.currentTimeMillis() - startedAt) + " мс, попыток "
-                    + searchAttempts.get() + ", отклонено мест " + rejectedPlaces.get());
+                    + job.attempts.get() + ", отклонено мест " + job.rejected.get());
             chunkService.clear();
             scheduler.runGlobal(() -> callback.accept(result));
         };
@@ -210,7 +235,7 @@ public final class DungeonService {
             finish.accept(new SpawnResult.Failed(SpawnResult.Reason.REGIONS_UNAVAILABLE));
             return;
         }
-        spawnRandom(world, templateId, configManager.settings().spawn().attempts(), finish);
+        spawnRandom(world, templateId, configManager.settings().spawn().attempts(), job, finish);
     }
 
     public void undo(@NotNull String rawId, @NotNull Consumer<SpawnResult.Undo> callback) {
@@ -225,7 +250,7 @@ public final class DungeonService {
             scheduler.runGlobal(() -> callback.accept(SpawnResult.Undo.WORLD_MISSING));
             return;
         }
-        if (!undoing.add(regionId)) {
+        if (!busy.add(regionId)) {
             scheduler.runGlobal(() -> callback.accept(SpawnResult.Undo.BUSY));
             return;
         }
@@ -234,7 +259,7 @@ public final class DungeonService {
         Bounds bounds = record.bounds();
         Location anchor = bounds.anchor(world);
         Consumer<SpawnResult.Undo> finish = result -> {
-            undoing.remove(regionId);
+            busy.remove(regionId);
             schematicService.release(world, bounds);
             scheduler.runGlobal(() -> callback.accept(result));
         };
@@ -256,7 +281,7 @@ public final class DungeonService {
 
         String regionId = shulker.getRegionId();
         DungeonRecord record = dungeonRepository.find(regionId);
-        if (record == null || autoUndoTasks.containsKey(regionId) || undoing.contains(regionId)) {
+        if (record == null || autoUndoTasks.containsKey(regionId) || busy.contains(regionId)) {
             return;
         }
         DungeonTemplate template = configManager.settings()
@@ -274,6 +299,7 @@ public final class DungeonService {
     public @Nullable DungeonRecord compassTarget(@NotNull Player player, boolean nearest, @Nullable String lastId) {
         World world = player.getWorld();
         List<DungeonRecord> candidates = new ArrayList<>(dungeonRepository.inWorld(world.getUID()));
+        candidates.removeIf(record -> !record.isReady());
         if (candidates.isEmpty()) {
             return null;
         }
@@ -307,16 +333,17 @@ public final class DungeonService {
             task.cancel();
         }
         autoUndoSeconds.clear();
-        undoing.clear();
+        busy.clear();
     }
 
     private void spawnRandom(
             @NotNull World world,
             @Nullable String templateId,
             int attemptsLeft,
+            @NotNull Job job,
             @NotNull Consumer<SpawnResult> finish
     ) {
-        if (cancelled) {
+        if (job.cancelled()) {
             finish.accept(new SpawnResult.Cancelled());
             return;
         }
@@ -325,7 +352,7 @@ public final class DungeonService {
             return;
         }
 
-        searchAttempts.incrementAndGet();
+        job.attempts.incrementAndGet();
         Settings settings = configManager.settings();
         Settings.Spawn spawn = settings.spawn();
         int centerX = ThreadLocalRandom.current().nextInt(spawn.minX(), spawn.maxX() + 1);
@@ -339,7 +366,7 @@ public final class DungeonService {
                 centerZ,
                 spawn,
                 Math.min(spawn.scanRadius(), areaRadius),
-                (index, blockX, blockZ) -> !cancelled
+                (index, blockX, blockZ) -> !job.cancelled()
                         && spawn.contains(blockX, blockZ)
                         && isFarEnough(existing, blockX, blockZ, settings.region())
                         && ChunkService.matches(world, index, blockX, blockZ)
@@ -349,7 +376,7 @@ public final class DungeonService {
                     List<Candidate> candidates = index == null
                             ? List.of()
                             : candidates(world, index, hit[0], hit[1], settings, templateId);
-                    if (cancelled) {
+                    if (job.cancelled()) {
                         finish.accept(new SpawnResult.Cancelled());
                         return;
                     }
@@ -357,16 +384,16 @@ public final class DungeonService {
                         reject.run();
                         return;
                     }
-                    prepare(pick(candidates), result -> {
+                    prepare(pick(candidates), job, result -> {
                         if (result instanceof SpawnResult.Unsuitable) {
-                            rejectedPlaces.incrementAndGet();
+                            job.rejected.incrementAndGet();
                             reject.run();
                             return;
                         }
                         finish.accept(result);
                     });
                 },
-                () -> spawnRandom(world, templateId, attemptsLeft - 1, finish));
+                () -> spawnRandom(world, templateId, attemptsLeft - 1, job, finish));
     }
 
     private @NotNull List<Candidate> candidates(
@@ -438,16 +465,27 @@ public final class DungeonService {
     ) {
         long minDistanceSquared = (long) region.minDistance() * region.minDistance();
         for (DungeonRecord record : existing) {
-            long deltaX = (record.getMinX() + record.getMaxX()) / 2L - x;
-            long deltaZ = (record.getMinZ() + record.getMaxZ()) / 2L - z;
-            if (deltaX * deltaX + deltaZ * deltaZ < minDistanceSquared) {
+            if (isCloser(record.bounds(), x, z, minDistanceSquared)) {
                 return false;
+            }
+        }
+        synchronized (slotLock) {
+            for (Bounds other : reserved.values()) {
+                if (isCloser(other, x, z, minDistanceSquared)) {
+                    return false;
+                }
             }
         }
         return true;
     }
 
-    private void prepare(@NotNull Candidate candidate, @NotNull Consumer<SpawnResult> finish) {
+    private static boolean isCloser(@NotNull Bounds bounds, int x, int z, long distanceSquared) {
+        long deltaX = (bounds.minX() + bounds.maxX()) / 2L - x;
+        long deltaZ = (bounds.minZ() + bounds.maxZ()) / 2L - z;
+        return deltaX * deltaX + deltaZ * deltaZ < distanceSquared;
+    }
+
+    private void prepare(@NotNull Candidate candidate, @NotNull Job job, @NotNull Consumer<SpawnResult> finish) {
         Location location = candidate.location();
         DungeonTemplate template = candidate.template();
         World world = location.getWorld();
@@ -470,28 +508,38 @@ public final class DungeonService {
             finish.accept(new SpawnResult.Unsuitable());
             return;
         }
-        if (!reserveSlot(settings.region().maxDungeons())) {
-            finish.accept(new SpawnResult.LimitReached(settings.region().maxDungeons()));
-            return;
+        BlockVector3 regionMin = region.getMinimumPoint();
+        BlockVector3 regionMax = region.getMaximumPoint();
+        Bounds area = new Bounds(regionMin.x(), regionMin.y(), regionMin.z(), regionMax.x(), regionMax.y(), regionMax.z());
+        switch (reserve(regionId, area, settings.region())) {
+            case LIMIT -> {
+                finish.accept(new SpawnResult.LimitReached(settings.region().maxDungeons()));
+                return;
+            }
+            case TAKEN -> {
+                finish.accept(new SpawnResult.Unsuitable());
+                return;
+            }
+            case OK -> {
+            }
         }
 
         Consumer<SpawnResult> done = result -> {
+            releaseSlot(regionId);
             schematicService.release(world, bounds);
             finish.accept(result);
         };
         schematicService.loadChunks(world, bounds, bounds.anchor(world), loaded -> {
             if (!loaded) {
-                releaseSlot();
                 done.accept(new SpawnResult.Unsuitable());
                 return;
             }
             if (!chunkService.fits(world, bounds, candidate.surfaceY(), template.placement(),
                     template.flatness())) {
-                releaseSlot();
                 done.accept(new SpawnResult.Unsuitable());
                 return;
             }
-            build(location, regions, region, regionId, template, clipboard, bounds, done);
+            build(location, regions, region, regionId, template, clipboard, bounds, job, done);
         });
     }
 
@@ -503,6 +551,7 @@ public final class DungeonService {
             @NotNull DungeonTemplate template,
             @NotNull Clipboard clipboard,
             @NotNull Bounds bounds,
+            @NotNull Job job,
             @NotNull Consumer<SpawnResult> finish
     ) {
         World world = location.getWorld();
@@ -511,40 +560,47 @@ public final class DungeonService {
             long capturedAt = System.currentTimeMillis();
             Logger.debug("Данж " + regionId + ": бэкап территории " + (capturedAt - buildStartedAt) + " мс");
             if (terrain == null) {
-                releaseSlot();
                 finish.accept(new SpawnResult.Failed(SpawnResult.Reason.BACKUP_FAILED));
                 return;
             }
-            if (cancelled) {
-                releaseSlot();
+            if (job.cancelled()) {
                 finish.accept(new SpawnResult.Cancelled());
                 return;
             }
-            schematicService.paste(world, clipboard, bounds, template.schematic(), pasted -> {
-                Logger.debug("Данж " + regionId + ": вставка схемы " + (System.currentTimeMillis() - capturedAt) + " мс");
-                if (!pasted) {
-                    schematicService.restore(world, bounds, terrain, restored -> {
-                        releaseSlot();
-                        finish.accept(new SpawnResult.Failed(SpawnResult.Reason.PASTE_FAILED));
-                    });
+            DungeonRecord record = new DungeonRecord(
+                    regionId, world.getUID(), world.getName(), bounds, template.file(), template.id());
+            record.setReady(false);
+            busy.add(regionId);
+            dungeonRepository.save(record, terrain, saved -> scheduler.runAt(location, () -> {
+                if (!saved) {
+                    busy.remove(regionId);
+                    finish.accept(new SpawnResult.Failed(SpawnResult.Reason.BACKUP_FAILED));
                     return;
                 }
-                if (cancelled) {
-                    schematicService.restore(world, bounds, terrain, restored -> {
-                        releaseSlot();
-                        finish.accept(new SpawnResult.Cancelled());
-                    });
-                    return;
-                }
+                schematicService.paste(world, clipboard, bounds, template.schematic(), pasted -> {
+                    Logger.debug("Данж " + regionId + ": вставка схемы "
+                            + (System.currentTimeMillis() - capturedAt) + " мс");
+                    if (!pasted || job.cancelled()) {
+                        SpawnResult result = pasted
+                                ? new SpawnResult.Cancelled()
+                                : new SpawnResult.Failed(SpawnResult.Reason.PASTE_FAILED);
+                        schematicService.restore(world, bounds, terrain, restored -> {
+                            if (restored) {
+                                dungeonRepository.delete(record);
+                            }
+                            busy.remove(regionId);
+                            finish.accept(result);
+                        });
+                        return;
+                    }
 
-                dungeonRepository.save(
-                        new DungeonRecord(regionId, world.getUID(), world.getName(), bounds, template.file(), template.id()),
-                        terrain);
-                populateShulkers(world, bounds, regionId, template);
-                regions.addRegion(region);
-                releaseSlot();
-                finish.accept(new SpawnResult.Success(regionId, location, template.name()));
-            });
+                    populateShulkers(world, bounds, regionId, template);
+                    regions.addRegion(region);
+                    dungeonRepository.markReady(record);
+                    busy.remove(regionId);
+                    finish.accept(new SpawnResult.Success(regionId, location, template.name()));
+                });
+            }));
         });
     }
 
@@ -701,7 +757,7 @@ public final class DungeonService {
             if (world == null || auto.respawnOnlyWithPlayers() && world.getPlayerCount() == 0) {
                 return;
             }
-            spawnRandom(world, result -> {
+            start(world, null, new Job(false), result -> {
                 if (result instanceof SpawnResult.Success || result instanceof SpawnResult.Cancelled) {
                     return;
                 }
@@ -711,8 +767,7 @@ public final class DungeonService {
                 }
                 Logger.warn("Авто-респавн данжа в мире " + world.getName() + " не удался: " + switch (result) {
                     case SpawnResult.LimitReached limit -> "лимит данжей " + limit.limit();
-                    case SpawnResult.Failed failed -> configManager.raw(
-                            "spawn.reasons." + failed.reason().name().toLowerCase(Locale.ROOT).replace('_', '-'));
+                    case SpawnResult.Failed failed -> reasonText(failed);
                     default -> "не нашлось места";
                 });
             });
@@ -727,20 +782,39 @@ public final class DungeonService {
         }
     }
 
-    private boolean reserveSlot(int maxDungeons) {
+    private @NotNull Slot reserve(@NotNull String regionId, @NotNull Bounds area, @NotNull Settings.Region settings) {
+        long minDistanceSquared = (long) settings.minDistance() * settings.minDistance();
+        int centerX = (area.minX() + area.maxX()) / 2;
+        int centerZ = (area.minZ() + area.maxZ()) / 2;
         synchronized (slotLock) {
-            if (maxDungeons > 0 && dungeonRepository.count() + pendingSpawns >= maxDungeons) {
-                return false;
+            long building = reserved.keySet().stream().filter(id -> dungeonRepository.find(id) == null).count();
+            if (settings.maxDungeons() > 0 && dungeonRepository.count() + building >= settings.maxDungeons()) {
+                return Slot.LIMIT;
             }
-            pendingSpawns++;
-            return true;
+            for (Bounds other : reserved.values()) {
+                if (intersects(area, other) || isCloser(other, centerX, centerZ, minDistanceSquared)) {
+                    return Slot.TAKEN;
+                }
+            }
+            reserved.put(regionId, area);
+            return Slot.OK;
         }
     }
 
-    private void releaseSlot() {
+    private void releaseSlot(@NotNull String regionId) {
         synchronized (slotLock) {
-            pendingSpawns = Math.max(0, pendingSpawns - 1);
+            reserved.remove(regionId);
         }
+    }
+
+    private static boolean intersects(@NotNull Bounds first, @NotNull Bounds second) {
+        return first.minX() <= second.maxX() && first.maxX() >= second.minX()
+                && first.minY() <= second.maxY() && first.maxY() >= second.minY()
+                && first.minZ() <= second.maxZ() && first.maxZ() >= second.minZ();
+    }
+
+    private @NotNull String reasonText(@NotNull SpawnResult.Failed failed) {
+        return configManager.raw("spawn.reasons." + failed.reason().name().toLowerCase(Locale.ROOT).replace('_', '-'));
     }
 
     private @Nullable RegionManager regionManager(@NotNull World world) {
@@ -762,5 +836,26 @@ public final class DungeonService {
     }
 
     private record Candidate(@NotNull Location location, @NotNull DungeonTemplate template, int surfaceY) {
+    }
+
+    private enum Slot {
+        OK,
+        LIMIT,
+        TAKEN
+    }
+
+    private final class Job {
+
+        private final boolean manual;
+        private final @NotNull AtomicInteger attempts = new AtomicInteger();
+        private final @NotNull AtomicInteger rejected = new AtomicInteger();
+
+        private Job(boolean manual) {
+            this.manual = manual;
+        }
+
+        private boolean cancelled() {
+            return manual && manualCancelled;
+        }
     }
 }

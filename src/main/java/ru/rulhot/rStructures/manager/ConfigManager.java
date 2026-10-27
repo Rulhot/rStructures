@@ -24,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 public final class ConfigManager {
@@ -46,6 +47,7 @@ public final class ConfigManager {
 
     private final @NotNull JavaPlugin plugin;
     private volatile @Nullable Snapshot snapshot;
+    private final @NotNull Set<String> warnedKeys = ConcurrentHashMap.newKeySet();
 
     public ConfigManager(@NotNull JavaPlugin plugin) {
         this.plugin = plugin;
@@ -115,6 +117,7 @@ public final class ConfigManager {
                 bundle.dungeons());
         Logger.setDebugEnabled(settings.debug());
         snapshot = new Snapshot(settings, Map.copyOf(messages));
+        warnedKeys.clear();
     }
 
     public @NotNull Settings settings() {
@@ -128,7 +131,9 @@ public final class ConfigManager {
     public @NotNull String raw(@NotNull String key) {
         String value = snapshot().messages().get(key);
         if (value == null) {
-            Logger.warn("В messages.yml нет ключа '" + key + "'");
+            if (warnedKeys.add(key)) {
+                Logger.warn("В messages.yml нет ключа '" + key + "'");
+            }
             return "";
         }
         return value;

@@ -18,7 +18,7 @@ public final class LootItemRecord {
     private int id;
 
     @DatabaseField(columnName = "chance")
-    private int chance;
+    private volatile int chance;
 
     @DatabaseField(columnName = "item_data", dataType = DataType.BYTE_ARRAY, columnDefinition = "LONGBLOB")
     private byte @NotNull [] itemData = new byte[0];

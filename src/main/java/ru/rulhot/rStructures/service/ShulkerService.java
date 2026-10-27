@@ -30,6 +30,7 @@ import ru.rulhot.rStructures.util.SchedulerUtil;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
@@ -57,6 +58,8 @@ public final class ShulkerService {
     private final @NotNull Map<BlockPos, Integer> hits = new ConcurrentHashMap<>();
     private final @NotNull Map<BlockPos, String> shownTime = new ConcurrentHashMap<>();
     private final @NotNull Map<UUID, Long> deniedAt = new ConcurrentHashMap<>();
+    private final @NotNull Set<BlockPos> ticking = ConcurrentHashMap.newKeySet();
+    private volatile @Nullable SchedulerUtil.Task timerTask;
 
     public void forgetPlayer(@NotNull UUID playerId) {
         deniedAt.remove(playerId);
@@ -221,14 +224,24 @@ public final class ShulkerService {
     }
 
     public void startTimers() {
-        scheduler.runGlobalTimer(TIMER_PERIOD_TICKS, () -> {
+        SchedulerUtil.Task previous = timerTask;
+        if (previous != null) {
+            previous.cancel();
+        }
+        timerTask = scheduler.runGlobalTimer(TIMER_PERIOD_TICKS, () -> {
             long now = System.currentTimeMillis();
             for (ShulkerRecord record : shulkerRepository.all()) {
                 World world = record.isOpened() || record.getOpenAt() <= 0L ? null : Bukkit.getWorld(record.getWorldUuid());
-                if (world == null) {
+                if (world == null || !ticking.add(record.pos())) {
                     continue;
                 }
-                scheduler.runAt(new Location(world, record.getX(), record.getY(), record.getZ()), () -> tick(world, record, now));
+                scheduler.runAt(new Location(world, record.getX(), record.getY(), record.getZ()), () -> {
+                    try {
+                        tick(world, record, now);
+                    } finally {
+                        ticking.remove(record.pos());
+                    }
+                });
             }
         });
     }

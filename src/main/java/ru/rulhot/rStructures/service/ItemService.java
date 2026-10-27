@@ -41,6 +41,7 @@ public final class ItemService {
     private final @NotNull NamespacedKey shownKey;
     private final @NotNull ConfigManager configManager;
     private volatile @NotNull Map<CustomItem, ItemStack> templates = Map.of();
+    private volatile @Nullable SchedulerUtil.Task compassTask;
 
     public ItemService(@NotNull Plugin plugin, @NotNull ConfigManager configManager) {
         this.configManager = configManager;
@@ -120,7 +121,11 @@ public final class ItemService {
     }
 
     public void startCompassTimer(@NotNull SchedulerUtil scheduler) {
-        scheduler.runGlobalTimer(TICKS_PER_SECOND, () -> {
+        SchedulerUtil.Task previous = compassTask;
+        if (previous != null) {
+            previous.cancel();
+        }
+        compassTask = scheduler.runGlobalTimer(TICKS_PER_SECOND, () -> {
             Material material = configManager.settings().items().compass().material();
             for (Player player : Bukkit.getOnlinePlayers()) {
                 scheduler.runFor(player, () -> {

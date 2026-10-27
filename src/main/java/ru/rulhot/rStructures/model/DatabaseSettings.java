@@ -16,7 +16,8 @@ public record DatabaseSettings(@NotNull Type type, @NotNull MySql mysql) {
                         root.getInt("mysql.port", 3306),
                         root.getString("mysql.database", "rstructures"),
                         root.getString("mysql.user", "root"),
-                        root.getString("mysql.password", "")));
+                        root.getString("mysql.password", ""),
+                        root.getBoolean("mysql.ssl", false)));
     }
 
     private static @NotNull Type type(@NotNull String raw) {
@@ -38,7 +39,8 @@ public record DatabaseSettings(@NotNull Type type, @NotNull MySql mysql) {
             int port,
             @NotNull String database,
             @NotNull String username,
-            @NotNull String password
+            @NotNull String password,
+            boolean ssl
     ) {
 
         @Override

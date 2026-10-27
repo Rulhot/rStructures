@@ -347,8 +347,12 @@ public final class SchematicService {
                 || entity.isInsideVehicle() || !entity.getPassengers().isEmpty()) {
             return false;
         }
-        if (entity instanceof Item) {
-            return clear.items();
+        if (entity instanceof Item item) {
+            return clear.items() && item.getThrower() == null;
+        }
+        if (entity instanceof LivingEntity living && living.isLeashed()
+                || entity instanceof Animals animal && animal.getBreedCause() != null) {
+            return false;
         }
         if (entity instanceof Vehicle && !(entity instanceof LivingEntity)) {
             return clear.vehicles();
@@ -402,9 +406,14 @@ public final class SchematicService {
     }
 
     private @Nullable File resolve(@NotNull String fileName) {
-        File own = new File(new File(plugin.getDataFolder(), FOLDER), fileName);
-        if (own.isFile()) {
-            return own;
+        Path ownFolder = plugin.getDataFolder().toPath().resolve(FOLDER).toAbsolutePath().normalize();
+        Path own = ownFolder.resolve(fileName).normalize();
+        if (!own.startsWith(ownFolder)) {
+            Logger.warn("schematic.file: '" + fileName + "' выходит за пределы папки " + FOLDER + ", пропущен");
+            return null;
+        }
+        if (Files.isRegularFile(own)) {
+            return own.toFile();
         }
         Path plugins = plugin.getDataFolder().getParentFile().toPath().toAbsolutePath().normalize();
         for (String folder : configManager.settings().schematic().folders()) {

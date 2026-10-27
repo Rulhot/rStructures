@@ -4,7 +4,7 @@ name: "<white>Воздушный данж"
 
 schematic:
   # Файл схемы из папки plugins/rStructures/schem/ или из schematic-folders в config.yml
-  file: air1.schem
+  file: air.schem
   # true: воздух из схемы не затирает блоки мира
   ignore-air: true
   # Сдвиг схемы от найденной точки в блоках

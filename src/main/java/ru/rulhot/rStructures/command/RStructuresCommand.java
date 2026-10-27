@@ -24,6 +24,11 @@ public final class RStructuresCommand implements BasicCommand {
     }
 
     @Override
+    public @NotNull String permission() {
+        return ADMIN_PERMISSION;
+    }
+
+    @Override
     public void execute(@NotNull CommandSourceStack source, @NotNull String[] args) {
         CommandSender sender = source.getSender();
         if (!sender.hasPermission(ADMIN_PERMISSION)) {

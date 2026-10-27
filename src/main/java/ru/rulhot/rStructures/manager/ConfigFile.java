@@ -117,6 +117,14 @@ public class ConfigFile {
             merged.setInlineComments(key, defaults.getInlineComments(key));
         }
 
+        for (String key : current.getKeys(true)) {
+            if (!key.equals(VERSION_KEY) && !merged.contains(key) && !current.isConfigurationSection(key)) {
+                merged.set(key, current.get(key));
+                merged.setComments(key, current.getComments(key));
+                merged.setInlineComments(key, current.getInlineComments(key));
+            }
+        }
+
         merged.set(VERSION_KEY, defaults.getInt(VERSION_KEY, 0));
         merged.setComments(VERSION_KEY, defaults.getComments(VERSION_KEY));
         merged.setInlineComments(VERSION_KEY, defaults.getInlineComments(VERSION_KEY));

@@ -4,7 +4,7 @@ name: "<white>Наземный данж"
 
 schematic:
   # Файл схемы из папки plugins/rStructures/schem/ или из schematic-folders в config.yml
-  file: ground1.schem
+  file: ground.schem
   # true: воздух из схемы не затирает блоки мира
   ignore-air: true
   # Сдвиг схемы от найденной точки в блоках
@@ -38,13 +38,13 @@ spawn:
   # plains или minecraft:plains: один биом
   # "*ocean*": все биомы, где в названии есть ocean. Строки со звёздочкой пиши в кавычках
   # "*": все биомы, "terralith:*": все биомы датапака Terralith
-  biomes: [plains, sunflower_plains, meadow, snowy_plains]
+  biomes: ["*"]
   # Вес при выборе: тип с весом 10 выпадает вдвое чаще типа с весом 5
   weight: 10
   # Сколько данжей этого типа стоит одновременно, -1 без ограничения
   limit: -1
   # Допустимый перепад высот земли под данжем в блоках
-  flatness: 3
+  flatness: 6
   # Сдвиг по высоте от поверхности земли
   height: 0
 

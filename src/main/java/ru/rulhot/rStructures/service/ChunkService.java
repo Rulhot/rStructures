@@ -14,6 +14,7 @@ import ru.rulhot.rStructures.model.Bounds;
 import ru.rulhot.rStructures.model.DungeonTemplate.Placement;
 import ru.rulhot.rStructures.model.Settings;
 import ru.rulhot.rStructures.util.SchedulerUtil;
+import ru.rulhot.rStructures.util.logger.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -132,7 +133,7 @@ public final class ChunkService {
     }
 
     private static boolean isPassable(@NotNull Material material) {
-        return !material.isSolid() || isTreeOrFoliage(material);
+        return !material.isSolid() || material == Material.SNOW || isTreeOrFoliage(material);
     }
 
     private boolean fitsColumn(
@@ -149,10 +150,37 @@ public final class ChunkService {
             return index.isClear(blockX, bounds.minY(), bounds.maxY(), blockZ);
         }
         ColumnSample column = index.sample(blockX, blockZ);
-        return matches(world, index, blockX, blockZ)
-                && isWaterSurface(column.top) == (placement == Placement.WATER)
-                && Math.abs(column.highestY - surfaceY) <= flatness
-                && index.isClear(blockX, Math.max(column.highestY + 1, bounds.minY()), bounds.maxY(), blockZ);
+        String reason = rejectReason(world, index, column, bounds, blockX, blockZ, surfaceY, placement, flatness);
+        if (reason != null && placement == Placement.GROUND) {
+            Logger.debug("ground " + blockX + " " + column.highestY + " " + blockZ + ": " + reason);
+        }
+        return reason == null;
+    }
+
+    private static @Nullable String rejectReason(
+            @NotNull World world,
+            @NotNull Index index,
+            @NotNull ColumnSample column,
+            @NotNull Bounds bounds,
+            int blockX,
+            int blockZ,
+            int surfaceY,
+            @NotNull Placement placement,
+            int flatness
+    ) {
+        if (!matches(world, index, blockX, blockZ)) {
+            return "плохая поверхность " + column.top;
+        }
+        if (isWaterSurface(column.top) != (placement == Placement.WATER)) {
+            return "вода под схемой";
+        }
+        if (Math.abs(column.highestY - surfaceY) > flatness) {
+            return "перепад " + Math.abs(column.highestY - surfaceY) + " при flatness " + flatness;
+        }
+        if (!index.isClear(blockX, Math.max(column.highestY + 1, bounds.minY()), bounds.maxY(), blockZ)) {
+            return "место над землёй занято";
+        }
+        return null;
     }
 
     private void scanRing(@NotNull Search search, int chunkRadius) {

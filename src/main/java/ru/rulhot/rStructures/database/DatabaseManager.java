@@ -31,6 +31,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 @RequiredArgsConstructor
 public final class DatabaseManager {
@@ -45,7 +46,7 @@ public final class DatabaseManager {
     private static final @NotNull String SQLITE_FILE = "rstructures.db";
     private static final @NotNull String SQLITE_PARAMS = "?journal_mode=DELETE&synchronous=FULL&busy_timeout=5000";
     private static final @NotNull String MYSQL_PARAMS =
-            "?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&rewriteBatchedStatements=true";
+            "&allowPublicKeyRetrieval=true&characterEncoding=utf8&rewriteBatchedStatements=true";
     private static final @NotNull List<String> SHULKER_COLUMNS = List.of(
             "open_type VARCHAR(16) NOT NULL DEFAULT 'key'",
             "open_seconds BIGINT NOT NULL DEFAULT 0",
@@ -53,12 +54,13 @@ public final class DatabaseManager {
     private static final @NotNull String DUNGEON_TEMPLATE_COLUMN = "template_id VARCHAR(64) NOT NULL DEFAULT ''";
     private static final @NotNull String LOOT_POOL_COLUMN = "pool VARCHAR(64) NOT NULL DEFAULT 'default'";
     private static final @NotNull String DUNGEON_CREATED_COLUMN = "created_at BIGINT NOT NULL DEFAULT 0";
+    private static final @NotNull String DUNGEON_READY_COLUMN = "ready BOOLEAN NOT NULL DEFAULT 1";
     private static final int SQLITE_POOL_SIZE = 2;
     private static final int MYSQL_POOL_SIZE = 4;
     private static final long CONNECTION_TIMEOUT_MILLIS = TimeUnit.SECONDS.toMillis(10L);
     private static final long IDLE_TIMEOUT_MILLIS = TimeUnit.MINUTES.toMillis(10L);
     private static final long MAX_LIFETIME_MILLIS = TimeUnit.MINUTES.toMillis(30L);
-    private static final long SHUTDOWN_TIMEOUT_SECONDS = 10L;
+    private static final long SHUTDOWN_TIMEOUT_SECONDS = 30L;
 
     private final @NotNull File dataFolder;
     private final @NotNull ExecutorService executor = Executors.newSingleThreadExecutor(runnable -> {
@@ -85,6 +87,7 @@ public final class DatabaseManager {
             }
             addColumn(shulkers, "rstructures_dungeons", DUNGEON_TEMPLATE_COLUMN);
             addColumn(shulkers, "rstructures_dungeons", DUNGEON_CREATED_COLUMN);
+            addColumn(shulkers, "rstructures_dungeons", DUNGEON_READY_COLUMN);
             addColumn(shulkers, "rstructures_loot", LOOT_POOL_COLUMN);
             return true;
         } catch (SQLException | IOException | RuntimeException exception) {
@@ -121,29 +124,50 @@ public final class DatabaseManager {
     }
 
     public void transaction(@NotNull String failureMessage, @NotNull SqlTask task) {
-        execute(failureMessage, () -> {
-            ConnectionSource connection = connectionSource;
-            if (connection == null) {
-                throw new SQLException("База данных не подключена");
-            }
-            TransactionManager.callInTransaction(connection, () -> {
-                task.run();
-                return null;
-            });
+        transaction(failureMessage, task, ignored -> {
         });
     }
 
-    public void execute(@NotNull String failureMessage, @NotNull SqlTask task) {
-        try {
-            executor.execute(() -> {
-                try {
-                    task.run();
-                } catch (SQLException | RuntimeException exception) {
-                    Logger.error(failureMessage, exception);
+    public void transaction(@NotNull String failureMessage, @NotNull SqlTask task, @NotNull Consumer<Boolean> callback) {
+        boolean queued = submit(failureMessage, () -> {
+            boolean saved = false;
+            try {
+                ConnectionSource connection = connectionSource;
+                if (connection == null) {
+                    throw new SQLException("База данных не подключена");
                 }
-            });
+                TransactionManager.callInTransaction(connection, () -> {
+                    task.run();
+                    return null;
+                });
+                saved = true;
+            } catch (SQLException | RuntimeException exception) {
+                Logger.error(failureMessage, exception);
+            }
+            callback.accept(saved);
+        });
+        if (!queued) {
+            callback.accept(false);
+        }
+    }
+
+    public void execute(@NotNull String failureMessage, @NotNull SqlTask task) {
+        submit(failureMessage, () -> {
+            try {
+                task.run();
+            } catch (SQLException | RuntimeException exception) {
+                Logger.error(failureMessage, exception);
+            }
+        });
+    }
+
+    private boolean submit(@NotNull String failureMessage, @NotNull Runnable task) {
+        try {
+            executor.execute(task);
+            return true;
         } catch (RejectedExecutionException exception) {
             Logger.error(failureMessage + ": база данных уже закрыта");
+            return false;
         }
     }
 
@@ -184,7 +208,7 @@ public final class DatabaseManager {
             DatabaseSettings.MySql mysql = settings.mysql();
             config.setDriverClassName("com.mysql.cj.jdbc.Driver");
             config.setJdbcUrl("jdbc:mysql://" + mysql.host() + ':' + mysql.port() + '/'
-                    + mysql.database() + MYSQL_PARAMS);
+                    + mysql.database() + "?useSSL=" + mysql.ssl() + MYSQL_PARAMS);
             config.setUsername(mysql.username());
             config.setPassword(mysql.password());
             config.setMaximumPoolSize(MYSQL_POOL_SIZE);

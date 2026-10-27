@@ -71,12 +71,22 @@ public final class DungeonRepository {
         return null;
     }
 
-    public void save(@NotNull DungeonRecord record, byte @NotNull [] terrain) {
-        cache.put(record.getRegionId(), record);
+    public void save(@NotNull DungeonRecord record, byte @NotNull [] terrain, @NotNull Consumer<Boolean> callback) {
         database.transaction("Не удалось сохранить данж " + record.getRegionId(), () -> {
             dungeonDao.create(record);
             terrainDao.createOrUpdate(new TerrainRecord(record.getRegionId(), terrain));
+        }, saved -> {
+            if (saved) {
+                cache.put(record.getRegionId(), record);
+            }
+            callback.accept(saved);
         });
+    }
+
+    public void markReady(@NotNull DungeonRecord record) {
+        record.setReady(true);
+        database.execute("Не удалось отметить данж " + record.getRegionId() + " готовым",
+                () -> dungeonDao.update(record));
     }
 
     public void delete(@NotNull DungeonRecord record) {

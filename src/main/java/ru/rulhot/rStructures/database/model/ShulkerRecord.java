@@ -34,7 +34,7 @@ public final class ShulkerRecord {
     private int z;
 
     @DatabaseField(columnName = "opened")
-    private boolean opened;
+    private volatile boolean opened;
 
     @DatabaseField(columnName = "region_id")
     private @Nullable String regionId;
@@ -46,7 +46,7 @@ public final class ShulkerRecord {
     private long openSeconds;
 
     @DatabaseField(columnName = "open_at")
-    private long openAt;
+    private volatile long openAt;
 
     public ShulkerRecord(
             @NotNull BlockPos pos,
