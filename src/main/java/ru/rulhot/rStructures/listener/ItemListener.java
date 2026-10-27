@@ -7,6 +7,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
+import org.bukkit.block.Crafter;
 import org.bukkit.block.TileState;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Openable;
@@ -18,17 +19,20 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.block.CrafterCraftEvent;
 import org.bukkit.event.enchantment.PrepareItemEnchantEvent;
 import org.bukkit.event.entity.ItemSpawnEvent;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerItemMendEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import ru.rulhot.rStructures.database.model.DungeonRecord;
 import ru.rulhot.rStructures.manager.ConfigManager;
 import ru.rulhot.rStructures.model.CustomItem;
@@ -142,8 +146,7 @@ public final class ItemListener implements Listener {
     @EventHandler
     public void onPrepareCraft(@NotNull PrepareItemCraftEvent event) {
         for (ItemStack ingredient : event.getInventory().getMatrix()) {
-            CustomItem type = itemService.type(ingredient);
-            if (type != null && configManager.settings().items().of(type).denyCraft()) {
+            if (isLocked(ingredient)) {
                 event.getInventory().setResult(null);
                 return;
             }
@@ -155,8 +158,7 @@ public final class ItemListener implements Listener {
         Inventory inventory = event.getInventory();
         int resultSlot = inventory.getSize() - 1;
         for (int slot = 0; slot < resultSlot; slot++) {
-            CustomItem type = itemService.type(inventory.getItem(slot));
-            if (type != null && configManager.settings().items().of(type).denyCraft()) {
+            if (isLocked(inventory.getItem(slot))) {
                 event.setResult(null);
                 return;
             }
@@ -169,6 +171,32 @@ public final class ItemListener implements Listener {
         if (type != null && configManager.settings().items().of(type).denyCraft()) {
             event.setCancelled(true);
         }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onCrafterCraft(@NotNull CrafterCraftEvent event) {
+        if (!(event.getBlock().getState(false) instanceof Crafter crafter)) {
+            return;
+        }
+        for (ItemStack ingredient : crafter.getInventory().getContents()) {
+            if (isLocked(ingredient)) {
+                event.setCancelled(true);
+                return;
+            }
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onMend(@NotNull PlayerItemMendEvent event) {
+        if (itemService.is(event.getItem(), CustomItem.PICKAXE)) {
+            event.setCancelled(true);
+        }
+    }
+
+    private boolean isLocked(@Nullable ItemStack item) {
+        CustomItem type = itemService.type(item);
+        return type == CustomItem.PICKAXE
+                || type != null && configManager.settings().items().of(type).denyCraft();
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

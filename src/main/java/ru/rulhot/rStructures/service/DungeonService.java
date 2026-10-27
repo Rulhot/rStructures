@@ -201,10 +201,6 @@ public final class DungeonService {
         };
     }
 
-    public void spawnRandom(@NotNull World world, @NotNull Consumer<SpawnResult> callback) {
-        spawn(world, null, callback);
-    }
-
     public void spawn(@NotNull World world, @Nullable String templateId, @NotNull Consumer<SpawnResult> callback) {
         start(world, templateId, new Job(true), callback);
     }

@@ -7,6 +7,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.jetbrains.annotations.NotNull;
+import ru.rulhot.rStructures.model.CustomItem;
 
 public final class MenuHolder implements InventoryHolder {
 
@@ -18,6 +19,9 @@ public final class MenuHolder implements InventoryHolder {
     @Getter
     @Setter
     private int page;
+    @Getter
+    @Setter
+    private @NotNull CustomItem dropItem = CustomItem.KEY;
     private long lastClickAt;
 
     public MenuHolder(@NotNull View view, int size, @NotNull Component title) {

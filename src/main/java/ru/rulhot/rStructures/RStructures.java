@@ -1,6 +1,7 @@
 package ru.rulhot.rStructures;
 
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
+import org.bukkit.NamespacedKey;
 import org.bukkit.permissions.Permission;
 import org.bukkit.permissions.PermissionDefault;
 import org.bukkit.plugin.PluginManager;
@@ -26,7 +27,7 @@ import ru.rulhot.rStructures.hook.GriefPreventionHook;
 import ru.rulhot.rStructures.hook.HologramHook;
 import ru.rulhot.rStructures.hook.ProtectionHook;
 import ru.rulhot.rStructures.listener.ItemListener;
-import ru.rulhot.rStructures.listener.KeyListener;
+import ru.rulhot.rStructures.listener.LootDropListener;
 import ru.rulhot.rStructures.listener.MenuListener;
 import ru.rulhot.rStructures.listener.ShulkerListener;
 import ru.rulhot.rStructures.manager.ConfigManager;
@@ -118,7 +119,8 @@ public final class RStructures extends JavaPlugin {
         this.dungeonService = dungeonService;
         dungeonService.startTimers();
         dungeonService.recoverUnfinished();
-        MenuManager menuManager = new MenuManager(scheduler, configManager, lootService, dungeonService);
+        MenuManager menuManager = new MenuManager(scheduler, configManager, lootService, dungeonService,
+                new NamespacedKey(this, "menu_icon"));
         this.menuManager = menuManager;
         menuManager.startRefresh();
 
@@ -126,7 +128,7 @@ public final class RStructures extends JavaPlugin {
             pluginManager.addPermission(ADMIN_PERMISSION);
         }
         pluginManager.registerEvents(new ShulkerListener(shulkerService, dungeonService), this);
-        pluginManager.registerEvents(new KeyListener(configManager, itemService, lootService), this);
+        pluginManager.registerEvents(new LootDropListener(configManager, itemService, lootService), this);
         pluginManager.registerEvents(new ItemListener(configManager, itemService, dungeonService), this);
         pluginManager.registerEvents(new MenuListener(menuManager), this);
 

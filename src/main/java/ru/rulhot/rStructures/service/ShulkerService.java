@@ -46,6 +46,7 @@ public final class ShulkerService {
     private static final long DENY_COOLDOWN_MILLIS = 1000L;
     private static final long MILLIS_ROUNDING = 999L;
     private static final long TIMER_PERIOD_TICKS = 4L;
+    private static final double TIMER_BAR_RADIUS = 8D;
     private static final @NotNull String TIME_PLACEHOLDER = "{time}";
 
     private final @NotNull ConfigManager configManager;
@@ -254,10 +255,16 @@ public final class ShulkerService {
             String time = configManager.formatTime(secondsLeft(record, System.currentTimeMillis()));
             if (!time.equals(shownTime.put(record.pos(), time))) {
                 showHologram(record);
+                if (!hologramsVisible()) {
+                    showTimerBar(world, record, configManager.message("shulker.timer-bar", Map.of("time", time)));
+                }
             }
             return;
         }
         shownTime.remove(record.pos());
+        if (!hologramsVisible()) {
+            showTimerBar(world, record, Component.empty());
+        }
         announce("shulker.opened-timer", Map.of());
         if (world.isChunkLoaded(record.getX() >> 4, record.getZ() >> 4)) {
             unlock(world.getBlockAt(record.getX(), record.getY(), record.getZ()), record);
@@ -265,6 +272,18 @@ public final class ShulkerService {
         }
         shulkerRepository.markOpened(record);
         showHologram(record);
+    }
+
+    private boolean hologramsVisible() {
+        return hologramHook != HologramHook.NONE && configManager.settings().holograms().enabled();
+    }
+
+    private void showTimerBar(@NotNull World world, @NotNull ShulkerRecord record, @NotNull Component message) {
+        Location center = new Location(world,
+                record.getX() + BLOCK_CENTER, record.getY() + BLOCK_CENTER, record.getZ() + BLOCK_CENTER);
+        for (Player player : center.getNearbyPlayers(TIMER_BAR_RADIUS)) {
+            player.sendActionBar(message);
+        }
     }
 
     private void startTimer(@NotNull Player player, @NotNull ShulkerRecord record) {

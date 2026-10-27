@@ -6,8 +6,8 @@ unknown: "{prefix} <white>Нет такой команды. Список: <#FEF0
 
 help:
   - "{prefix} <white>Команды:"
-  - " <white>/{command} menu <dark_gray>»</dark_gray> <white>лут, данжи, шанс ключа"
-  - " <white>/{command} spawn [кол-во] [мир] <dark_gray>»</dark_gray> <white>заспавнить данжи"
+  - " <white>/{command} menu <dark_gray>»</dark_gray> <white>лут, данжи, шансы предметов"
+  - " <white>/{command} spawn [кол-во] [мир] [тип] <dark_gray>»</dark_gray> <white>заспавнить данжи"
   - " <white>/{command} spawn cancel <dark_gray>»</dark_gray> <white>отменить идущий спавн"
   - " <white>/{command} undo [id] <dark_gray>»</dark_gray> <white>удалить данж"
   - " <white>/{command} give [key|compass|pickaxe] [игрок] [кол-во] <dark_gray>»</dark_gray> <white>выдать предмет"
@@ -24,8 +24,9 @@ auto:
   timer: "<white>Данж исчезнет через <#FEF06A>{time}"
 
 spawn:
-  usage: "{prefix} <white>Формат команды: <#FEF06A>/{command} spawn [кол-во] [мир]"
+  usage: "{prefix} <white>Формат команды: <#FEF06A>/{command} spawn [кол-во] [мир] [тип]"
   invalid-amount: "{prefix} <white>Количество от {min} до {max}."
+  unknown-type: "{prefix} <white>В мире {world} нет данжа типа {type}. Типы — это файлы из папки structures."
   started: "{prefix} <white>Ищу место для данжа {name}<white>. Отменить: <#FEF06A>/{command} spawn cancel"
   busy: "{prefix} <white>Спавн уже идёт. Отменить: <#FEF06A>/{command} spawn cancel"
   cancelled: "{prefix} <white>Спавн отменён."
@@ -59,6 +60,7 @@ shulker:
   closed-pickaxe: "{prefix} <white>Хранилище закрыто, сломай его киркой взломщика."
   timer-started: "{prefix} <white>Отсчёт запущен, хранилище откроется через <#FEF06A>{time}</#FEF06A>."
   timer-left: "{prefix} <white>Хранилище откроется через <#FEF06A>{time}</#FEF06A>."
+  timer-bar: "<white>Хранилище откроется через <#FEF06A>{time}"
   pickaxe-progress: "<white>Осталось ударов: <#FEF06A>{remaining}"
   opened: "{prefix} <white>{player} открыл хранилище данжа ключом."
   opened-pickaxe: "{prefix} <white>{player} взломал хранилище данжа киркой."
@@ -74,9 +76,13 @@ compass:
   cooldown: "{prefix} <white>Компас снова заработает через <#FEF06A>{time}</#FEF06A>."
   none: "{prefix} <white>В этом мире нет данжей."
   target: "{prefix} <white>Компас указывает на данж: <#FEF06A>{x} {y} {z}"
+  found: "{prefix} <white>{player} нашёл компас данжей."
 
 key:
   found: "{prefix} <white>{player} нашёл ключ от данжа."
+
+pickaxe:
+  found: "{prefix} <white>{player} нашёл кирку взломщика."
 
 loot:
   saved: "{prefix} <white>Лут сохранён."

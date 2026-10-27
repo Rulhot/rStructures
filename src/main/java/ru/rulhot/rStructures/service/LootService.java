@@ -8,6 +8,7 @@ import org.jetbrains.annotations.Nullable;
 import ru.rulhot.rStructures.database.model.LootItemRecord;
 import ru.rulhot.rStructures.database.repository.LootRepository;
 import ru.rulhot.rStructures.database.repository.ValueRepository;
+import ru.rulhot.rStructures.model.CustomItem;
 import ru.rulhot.rStructures.model.LootCategory;
 import ru.rulhot.rStructures.util.logger.Logger;
 
@@ -22,7 +23,7 @@ public final class LootService {
     public static final int MAX_CHANCE = 100;
     public static final @NotNull String STORAGE_POOL = "default";
     public static final @NotNull String PLAIN_POOL = "plain";
-    private static final @NotNull String KEY_CHANCE_PREFIX = "key-chance.";
+    private static final @NotNull String CHANCE_INFIX = "-chance.";
 
     private final @NotNull LootRepository lootRepository;
     private final @NotNull ValueRepository valueRepository;
@@ -83,16 +84,26 @@ public final class LootService {
         return entries;
     }
 
-    public int keyChance(@NotNull LootCategory category) {
-        return valueRepository.get(KEY_CHANCE_PREFIX + category.id(), 0);
+    public int dropChance(@NotNull CustomItem item, @NotNull LootCategory category) {
+        return valueRepository.get(chanceKey(item, category), 0);
     }
 
-    public void adjustKeyChance(@NotNull LootCategory category, int delta) {
-        valueRepository.set(KEY_CHANCE_PREFIX + category.id(), Math.clamp(keyChance(category) + delta, 0, MAX_CHANCE));
+    public void adjustDropChance(@NotNull CustomItem item, @NotNull LootCategory category, int delta) {
+        valueRepository.set(chanceKey(item, category), Math.clamp(dropChance(item, category) + delta, 0, MAX_CHANCE));
     }
 
-    public boolean rollKey(@NotNull LootCategory category) {
-        return ThreadLocalRandom.current().nextInt(MAX_CHANCE) < keyChance(category);
+    public @NotNull List<CustomItem> rollDrops(@NotNull LootCategory category) {
+        List<CustomItem> dropped = new ArrayList<>();
+        for (CustomItem item : CustomItem.values()) {
+            if (ThreadLocalRandom.current().nextInt(MAX_CHANCE) < dropChance(item, category)) {
+                dropped.add(item);
+            }
+        }
+        return dropped;
+    }
+
+    private static @NotNull String chanceKey(@NotNull CustomItem item, @NotNull LootCategory category) {
+        return item.id() + CHANCE_INFIX + category.id();
     }
 
     private @NotNull List<LootItemRecord> records(@NotNull String pool) {

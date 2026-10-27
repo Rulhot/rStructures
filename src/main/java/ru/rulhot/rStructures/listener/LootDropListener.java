@@ -9,10 +9,12 @@ import org.bukkit.block.BlockState;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Sniffer;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockDispenseLootEvent;
 import org.bukkit.event.entity.EntityDropItemEvent;
 import org.bukkit.event.world.LootGenerateEvent;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -27,41 +29,57 @@ import java.util.List;
 import java.util.Map;
 
 @RequiredArgsConstructor
-public final class KeyListener implements Listener {
+public final class LootDropListener implements Listener {
 
     private static final double FINDER_RADIUS = 64D;
+    private static final @NotNull String FOUND_SUFFIX = ".found";
+    private static final int SINGLE_SLOT = 1;
 
     private final @NotNull ConfigManager configManager;
     private final @NotNull ItemService itemService;
     private final @NotNull LootService lootService;
 
-    @EventHandler(ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onLootGenerate(@NotNull LootGenerateEvent event) {
         LootCategory category = LootCategory.match(event.getLootTable().getKey());
-        if (category == null || !lootService.rollKey(category)) {
+        if (category == null) {
             return;
         }
-        event.getLoot().add(itemService.create(CustomItem.KEY, 1));
+        List<CustomItem> dropped = lootService.rollDrops(category);
+        if (dropped.isEmpty()) {
+            return;
+        }
+        InventoryHolder holder = event.getInventoryHolder();
+        if (holder != null && holder.getInventory().getSize() > SINGLE_SLOT) {
+            dropped.forEach(type -> event.getLoot().add(create(type)));
+        } else {
+            Location location = event.getLootContext().getLocation();
+            dropped.forEach(type -> location.getWorld().dropItemNaturally(location, create(type)));
+        }
 
         Player finder = event.getEntity() instanceof Player player ? player : null;
         if (finder == null && event.getInventoryHolder() instanceof BlockState state) {
             finder = nearestPlayer(state.getLocation());
         }
-        announce(finder);
+        announce(finder, dropped);
     }
 
     @EventHandler(ignoreCancelled = true)
     public void onVaultDispense(@NotNull BlockDispenseLootEvent event) {
-        if (event.getBlock().getType() != Material.VAULT || !lootService.rollKey(LootCategory.VAULT)) {
+        if (event.getBlock().getType() != Material.VAULT) {
+            return;
+        }
+        List<CustomItem> dropped = lootService.rollDrops(LootCategory.VAULT);
+        if (dropped.isEmpty()) {
             return;
         }
         List<ItemStack> loot = new ArrayList<>(event.getDispensedLoot());
-        loot.add(itemService.create(CustomItem.KEY, 1));
+        dropped.forEach(type -> loot.add(create(type)));
         event.setDispensedLoot(loot);
-        announce(event.getPlayer());
+        announce(event.getPlayer(), dropped);
     }
 
-    @EventHandler(ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onSnifferDig(@NotNull EntityDropItemEvent event) {
         if (!(event.getEntity() instanceof Sniffer sniffer)) {
             return;
@@ -70,22 +88,35 @@ public final class KeyListener implements Listener {
         if (state != Sniffer.State.DIGGING && state != Sniffer.State.RISING) {
             return;
         }
-        if (!lootService.rollKey(LootCategory.SNIFFER)) {
+        List<CustomItem> dropped = lootService.rollDrops(LootCategory.SNIFFER);
+        if (dropped.isEmpty()) {
             return;
         }
 
         Location location = event.getItemDrop().getLocation();
-        location.getWorld().dropItemNaturally(location, itemService.create(CustomItem.KEY, 1));
-        announce(nearestPlayer(location));
+        dropped.forEach(type -> location.getWorld().dropItemNaturally(location, create(type)));
+        announce(nearestPlayer(location), dropped);
     }
 
-    private void announce(@Nullable Player finder) {
+    private @NotNull ItemStack create(@NotNull CustomItem type) {
+        ItemStack item = itemService.create(type, 1);
+        itemService.refreshCompass(item);
+        return item;
+    }
+
+    private void announce(@Nullable Player finder, @NotNull List<CustomItem> dropped) {
         if (finder == null) {
             return;
         }
-        Component message = configManager.message("key.found", Map.of("player", finder.getName()));
-        for (Player online : Bukkit.getOnlinePlayers()) {
-            online.sendMessage(message);
+        for (CustomItem type : dropped) {
+            String key = type.id() + FOUND_SUFFIX;
+            if (configManager.raw(key).isEmpty()) {
+                continue;
+            }
+            Component message = configManager.message(key, Map.of("player", finder.getName()));
+            for (Player online : Bukkit.getOnlinePlayers()) {
+                online.sendMessage(message);
+            }
         }
     }
 

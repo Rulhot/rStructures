@@ -18,12 +18,14 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import ru.rulhot.rStructures.command.RStructuresCommand;
 import ru.rulhot.rStructures.database.model.DungeonRecord;
 import ru.rulhot.rStructures.manager.ConfigManager;
 import ru.rulhot.rStructures.menu.MenuHolder.View;
+import ru.rulhot.rStructures.model.CustomItem;
 import ru.rulhot.rStructures.model.DungeonTemplate;
 import ru.rulhot.rStructures.model.LootCategory;
 import ru.rulhot.rStructures.service.DungeonService;
@@ -53,6 +55,7 @@ public final class MenuManager {
     private static final int PREVIOUS_SLOT = 39;
     private static final int BACK_SLOT = 40;
     private static final int NEXT_SLOT = 41;
+    private static final int DROP_ITEM_SLOT = 42;
     private static final long REFRESH_PERIOD_TICKS = 20L;
     private static final int SMALL_STEP = 1;
     private static final int BIG_STEP = 10;
@@ -60,7 +63,7 @@ public final class MenuManager {
     private static final @NotNull String KEYS_COLOR = "<#8FB8DE>";
     private static final @NotNull String LOOT_COLOR = "<#D9A26B>";
     private static final @NotNull String DUNGEONS_COLOR = "<#8CC77E>";
-    private static final @NotNull String KEYS_TITLE = "Где выпадает ключ";
+    private static final @NotNull String KEYS_TITLE = "Где выпадают предметы";
     private static final @NotNull String LOOT_TITLE = "Лут шалкеров";
     private static final @NotNull String PLAIN_TITLE = "Лут обычных блоков";
     private static final @NotNull String DUNGEONS_TITLE = "Данжи";
@@ -75,7 +78,9 @@ public final class MenuManager {
     private final @NotNull ConfigManager config;
     private final @NotNull LootService lootService;
     private final @NotNull DungeonService dungeonService;
+    private final @NotNull NamespacedKey iconKey;
     private volatile @Nullable SchedulerUtil.Task refreshTask;
+    private volatile boolean stopping;
 
     public void open(@NotNull Player player) {
         open(player, View.MAIN);
@@ -118,6 +123,12 @@ public final class MenuManager {
         }
         if (slot == PREVIOUS_SLOT || slot == NEXT_SLOT) {
             holder.setPage(holder.getPage() + (slot == NEXT_SLOT ? 1 : -1));
+            render(holder);
+            return;
+        }
+        if (view == View.KEYS && slot == DROP_ITEM_SLOT) {
+            CustomItem[] items = CustomItem.values();
+            holder.setDropItem(items[(holder.getDropItem().ordinal() + 1) % items.length]);
             render(holder);
             return;
         }
@@ -170,6 +181,7 @@ public final class MenuManager {
     }
 
     public void shutdown() {
+        stopping = true;
         SchedulerUtil.Task task = refreshTask;
         refreshTask = null;
         if (task != null) {
@@ -178,6 +190,8 @@ public final class MenuManager {
         for (Player player : Bukkit.getOnlinePlayers()) {
             if (player.getOpenInventory().getTopInventory().getHolder(false) instanceof MenuHolder) {
                 player.closeInventory();
+                removeIcons(player);
+                player.updateInventory();
             }
         }
     }
@@ -241,7 +255,7 @@ public final class MenuManager {
         LootCategory[] categories = LootCategory.values();
         int step = step(click);
         if (index < categories.length && step != 0) {
-            lootService.adjustKeyChance(categories[index], step);
+            lootService.adjustDropChance(holder.getDropItem(), categories[index], step);
             render(holder);
         }
     }
@@ -327,8 +341,9 @@ public final class MenuManager {
         Inventory inventory = holder.getInventory();
         switch (holder.getView()) {
             case MAIN -> {
-                inventory.setItem(KEYS_SLOT, icon(Material.LODESTONE, KEYS_TITLE, describe(KEYS_COLOR, "Ключ",
-                        List.of("шанс найти его в луте", "ванильных структур."), List.of(), List.of(OPEN_HINT))));
+                inventory.setItem(KEYS_SLOT, icon(Material.LODESTONE, KEYS_TITLE, describe(KEYS_COLOR, "Предметы",
+                        List.of("шанс найти ключ, компас и кирку", "в луте ванильных структур."), List.of(),
+                        List.of(OPEN_HINT))));
                 inventory.setItem(LOOT_SLOT, icon(Material.BARREL, LOOT_TITLE, describe(LOOT_COLOR, "Лут",
                         List.of("предметы, которые появляются", "в шалкерах данжа."),
                         List.of("Сейчас предметов: " + ACCENT + lootService.poolSize(LootService.STORAGE_POOL)),
@@ -363,11 +378,12 @@ public final class MenuManager {
                 int offset = clampPage(holder, categories.length);
                 List<ItemStack> icons = new ArrayList<>();
                 for (int index = offset; index < Math.min(categories.length, offset + CONTENT_SLOTS); index++) {
-                    icons.add(keyIcon(categories[index]));
+                    icons.add(dropIcon(categories[index], holder.getDropItem()));
                 }
-                renderList(holder, icons, icon(Material.OAK_HANGING_SIGN, KEYS_TITLE, describe(KEYS_COLOR, "Ключ",
-                        List.of("шанс найти его в луте", "ванильной структуры."),
+                renderList(holder, icons, icon(Material.OAK_HANGING_SIGN, KEYS_TITLE, describe(KEYS_COLOR, "Предметы",
+                        List.of("шанс найти предмет в луте", "ванильной структуры."),
                         List.of(SMALL_HINT, BIG_HINT), List.of())));
+                holder.getInventory().setItem(DROP_ITEM_SLOT, dropItemIcon(holder.getDropItem()));
             }
             case TYPES -> {
                 List<DungeonTemplate> templates = config.settings().templates();
@@ -387,6 +403,44 @@ public final class MenuManager {
                                         "ПКМ" + HINT_SEPARATOR + "заполнить шалкеры лутом",
                                         "Shift + ПКМ" + HINT_SEPARATOR + "удалить данж"), List.of())));
             }
+        }
+        markIcons(inventory);
+    }
+
+    public boolean isIcon(@Nullable ItemStack item) {
+        return item != null && !item.isEmpty() && item.getPersistentDataContainer().has(iconKey);
+    }
+
+    public void resync(@NotNull Player player) {
+        if (stopping) {
+            return;
+        }
+        scheduler.runFor(player, () -> {
+            removeIcons(player);
+            player.updateInventory();
+        });
+    }
+
+    private void removeIcons(@NotNull Player player) {
+        Inventory inventory = player.getInventory();
+        for (int slot = 0; slot < inventory.getSize(); slot++) {
+            if (isIcon(inventory.getItem(slot))) {
+                inventory.setItem(slot, null);
+            }
+        }
+        if (isIcon(player.getItemOnCursor())) {
+            player.setItemOnCursor(null);
+        }
+    }
+
+    private void markIcons(@NotNull Inventory inventory) {
+        for (int slot = 0; slot < inventory.getSize(); slot++) {
+            ItemStack item = inventory.getItem(slot);
+            if (item == null || item.isEmpty() || isIcon(item)) {
+                continue;
+            }
+            item.editMeta(meta -> meta.getPersistentDataContainer().set(iconKey, PersistentDataType.BOOLEAN, true));
+            inventory.setItem(slot, item);
         }
     }
 
@@ -423,10 +477,23 @@ public final class MenuManager {
         return icon;
     }
 
-    private @NotNull ItemStack keyIcon(@NotNull LootCategory category) {
-        int chance = lootService.keyChance(category);
-        return icon(chance > 0 ? Material.CHEST : Material.ENDER_CHEST, category.title(),
-                describe(KEYS_COLOR, "", List.of(), List.of("Шанс ключа: " + ACCENT + chance + "%"), List.of()));
+    private @NotNull ItemStack dropIcon(@NotNull LootCategory category, @NotNull CustomItem selected) {
+        List<String> bars = new ArrayList<>();
+        for (CustomItem item : CustomItem.values()) {
+            String marker = item == selected ? ACCENT + "» " : "<gray>";
+            bars.add(marker + itemName(item) + "<white>: " + ACCENT + lootService.dropChance(item, category) + "%");
+        }
+        Material material = lootService.dropChance(selected, category) > 0 ? Material.CHEST : Material.ENDER_CHEST;
+        return icon(material, category.title(), describe(KEYS_COLOR, "", List.of(), bars, List.of()));
+    }
+
+    private @NotNull ItemStack dropItemIcon(@NotNull CustomItem selected) {
+        return icon(config.settings().items().of(selected).material(), "Настраивается: " + itemName(selected),
+                describe(KEYS_COLOR, "", List.of(), List.of(), List.of("Нажми, чтобы сменить предмет")));
+    }
+
+    private @NotNull String itemName(@NotNull CustomItem item) {
+        return config.settings().items().of(item).name();
     }
 
     private void clickType(@NotNull Player player, @NotNull MenuHolder holder, int index, @NotNull ClickType click) {

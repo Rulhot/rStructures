@@ -10,6 +10,7 @@ import org.jetbrains.annotations.Nullable;
 import ru.rulhot.rStructures.command.RStructuresCommand;
 import ru.rulhot.rStructures.command.SubCommand;
 import ru.rulhot.rStructures.manager.ConfigManager;
+import ru.rulhot.rStructures.model.DungeonTemplate;
 import ru.rulhot.rStructures.service.DungeonService;
 
 import java.util.List;
@@ -50,7 +51,7 @@ public final class SpawnSubCommand implements SubCommand {
             dungeonService.cancelSpawn();
             return true;
         }
-        if (args.length > 2) {
+        if (args.length > 3) {
             config.send(sender, "spawn.usage");
             return true;
         }
@@ -65,15 +66,28 @@ public final class SpawnSubCommand implements SubCommand {
             amount = parsed;
         }
 
-        World world = resolveWorld(sender, args.length == 2 ? args[1] : null);
+        World world = resolveWorld(sender, args.length >= 2 ? args[1] : null);
         if (world == null) {
             return true;
+        }
+        String templateId = null;
+        if (args.length == 3) {
+            DungeonTemplate template = findTemplate(world, args[2]);
+            if (template == null) {
+                config.send(sender, "spawn.unknown-type", Map.of("type", args[2], "world", world.getName()));
+                return true;
+            }
+            if (template.limit() > 0 && dungeonService.count(template) >= template.limit()) {
+                config.send(sender, "spawn.limit-reached", Map.of("count", template.limit()));
+                return true;
+            }
+            templateId = template.id();
         }
         if (!dungeonService.beginSpawn()) {
             config.send(sender, "spawn.busy");
             return true;
         }
-        spawnNext(sender, world, amount);
+        spawnNext(sender, world, templateId, amount);
         return true;
     }
 
@@ -82,8 +96,19 @@ public final class SpawnSubCommand implements SubCommand {
         return switch (args.length) {
             case 1 -> SubCommand.suggest(Stream.of("1", "2", "3", "5", "10", CANCEL), args);
             case 2 -> SubCommand.suggest(config.settings().dungeonWorlds().stream(), args);
+            case 3 -> SubCommand.suggest(config.settings().templates().stream()
+                    .filter(template -> template.world().equalsIgnoreCase(args[1]))
+                    .map(DungeonTemplate::id), args);
             default -> List.of();
         };
+    }
+
+    private @Nullable DungeonTemplate findTemplate(@NotNull World world, @NotNull String id) {
+        return config.settings().templates().stream()
+                .filter(template -> template.id().equalsIgnoreCase(id)
+                        && template.world().equalsIgnoreCase(world.getName()))
+                .findFirst()
+                .orElse(null);
     }
 
     private @Nullable World resolveWorld(@NotNull CommandSender sender, @Nullable String name) {
@@ -105,14 +130,19 @@ public final class SpawnSubCommand implements SubCommand {
         return world;
     }
 
-    private void spawnNext(@NotNull CommandSender sender, @NotNull World world, int remaining) {
+    private void spawnNext(
+            @NotNull CommandSender sender,
+            @NotNull World world,
+            @Nullable String templateId,
+            int remaining
+    ) {
         if (remaining <= 0) {
             dungeonService.endSpawn();
             return;
         }
-        dungeonService.spawnRandom(world, result -> {
+        dungeonService.spawn(world, templateId, result -> {
             boolean proceed = dungeonService.report(sender, world, result);
-            spawnNext(sender, world, proceed ? remaining - 1 : 0);
+            spawnNext(sender, world, templateId, proceed ? remaining - 1 : 0);
         });
     }
 }
